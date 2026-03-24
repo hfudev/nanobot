@@ -962,6 +962,50 @@ def channels_status():
     console.print(table)
 
 
+def _find_bridge_source() -> Path | None:
+    """Return the packaged or repo bridge source directory."""
+    pkg_bridge = Path(__file__).parent.parent / "bridge"
+    src_bridge = Path(__file__).parent.parent.parent / "bridge"
+
+    if (pkg_bridge / "package.json").exists():
+        return pkg_bridge
+    if (src_bridge / "package.json").exists():
+        return src_bridge
+    return None
+
+
+def _bridge_needs_rebuild(source: Path, installed: Path) -> bool:
+    """Return True when the installed bridge is missing or older than the source."""
+    if not (installed / "dist" / "index.js").exists():
+        return True
+
+    tracked_files = [
+        source / "package.json",
+        source / "package-lock.json",
+        source / "tsconfig.json",
+    ]
+
+    for source_file in tracked_files:
+        if not source_file.exists():
+            continue
+        installed_file = installed / source_file.relative_to(source)
+        if not installed_file.exists() or source_file.stat().st_mtime > installed_file.stat().st_mtime:
+            return True
+
+    source_src_dir = source / "src"
+    if not source_src_dir.exists():
+        return False
+
+    for source_file in source_src_dir.rglob("*"):
+        if not source_file.is_file():
+            continue
+        installed_file = installed / source_file.relative_to(source)
+        if not installed_file.exists() or source_file.stat().st_mtime > installed_file.stat().st_mtime:
+            return True
+
+    return False
+
+
 def _get_bridge_dir() -> Path:
     """Get the bridge directory, setting it up if needed."""
     import shutil
@@ -972,8 +1016,14 @@ def _get_bridge_dir() -> Path:
 
     user_bridge = get_bridge_install_dir()
 
-    # Check if already built
-    if (user_bridge / "dist" / "index.js").exists():
+    source = _find_bridge_source()
+
+    if not source:
+        console.print("[red]Bridge source not found.[/red]")
+        console.print("Try reinstalling: pip install --force-reinstall nanobot")
+        raise typer.Exit(1)
+
+    if not _bridge_needs_rebuild(source, user_bridge):
         return user_bridge
 
     # Check for npm
@@ -982,22 +1032,8 @@ def _get_bridge_dir() -> Path:
         console.print("[red]npm not found. Please install Node.js >= 18.[/red]")
         raise typer.Exit(1)
 
-    # Find source bridge: first check package data, then source dir
-    pkg_bridge = Path(__file__).parent.parent / "bridge"  # nanobot/bridge (installed)
-    src_bridge = Path(__file__).parent.parent.parent / "bridge"  # repo root/bridge (dev)
-
-    source = None
-    if (pkg_bridge / "package.json").exists():
-        source = pkg_bridge
-    elif (src_bridge / "package.json").exists():
-        source = src_bridge
-
-    if not source:
-        console.print("[red]Bridge source not found.[/red]")
-        console.print("Try reinstalling: pip install --force-reinstall nanobot")
-        raise typer.Exit(1)
-
-    console.print(f"{__logo__} Setting up bridge...")
+    action = "Refreshing bridge..." if user_bridge.exists() else "Setting up bridge..."
+    console.print(f"{__logo__} {action}")
 
     # Copy to user directory
     user_bridge.parent.mkdir(parents=True, exist_ok=True)

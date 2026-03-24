@@ -39,6 +39,7 @@ class WhatsAppChannel(BaseChannel):
 
     name = "whatsapp"
     display_name = "WhatsApp"
+    BOT_PREFIX = "🤖"
 
     @classmethod
     def default_config(cls) -> dict[str, Any]:
@@ -138,7 +139,14 @@ class WhatsAppChannel(BaseChannel):
             logger.warning("WhatsApp bridge not connected")
             return
 
+        metadata = msg.metadata or {}
+        if metadata.get("_progress"):
+            logger.debug("Skipping WhatsApp progress message for {}", msg.chat_id)
+            return
+            
         chat_id = msg.chat_id
+        if not msg.content.startswith(self.BOT_PREFIX):
+            msg.content = f"{self.BOT_PREFIX} {msg.content}"
 
         if msg.content:
             try:
@@ -181,6 +189,14 @@ class WhatsAppChannel(BaseChannel):
             sender = data.get("sender", "")
             content = data.get("content", "")
             message_id = data.get("id", "")
+
+            if content.startswith(self.BOT_PREFIX):
+                logger.debug("Skipping WhatsApp bot-prefixed echo: {}", message_id or "<no-id>")
+                return
+        
+            if content.startswith("/no "):
+                logger.debug("Skipping WhatsApp /no command message: {}", message_id or "<no-id>")
+                return 
 
             if message_id:
                 if message_id in self._processed_message_ids:

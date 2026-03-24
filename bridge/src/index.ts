@@ -26,11 +26,18 @@ import { join } from 'path';
 const PORT = parseInt(process.env.BRIDGE_PORT || '3001', 10);
 const AUTH_DIR = process.env.AUTH_DIR || join(homedir(), '.nanobot', 'whatsapp-auth');
 const TOKEN = process.env.BRIDGE_TOKEN || undefined;
+const includeOwnMessagesEnv = process.env.WA_INCLUDE_OWN_MESSAGES;
+const INCLUDE_OWN_MESSAGES = includeOwnMessagesEnv == null
+  ? true
+  : !/^(0|false|no|off)$/i.test(includeOwnMessagesEnv);
 
 console.log('🐈 nanobot WhatsApp Bridge');
 console.log('========================\n');
+if (INCLUDE_OWN_MESSAGES) {
+  console.log("↩️ Forwarding self-sent WhatsApp messages is enabled");
+}
 
-const server = new BridgeServer(PORT, AUTH_DIR, TOKEN);
+const server = new BridgeServer(PORT, AUTH_DIR, TOKEN, INCLUDE_OWN_MESSAGES);
 
 // Handle graceful shutdown
 process.on('SIGINT', async () => {

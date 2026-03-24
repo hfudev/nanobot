@@ -30,11 +30,13 @@ export interface InboundMessage {
   timestamp: number;
   isGroup: boolean;
   wasMentioned?: boolean;
+  fromMe: boolean;
   media?: string[];
 }
 
 export interface WhatsAppClientOptions {
   authDir: string;
+  includeOwnMessages?: boolean;
   onMessage: (msg: InboundMessage) => void;
   onQR: (qr: string) => void;
   onStatus: (status: string) => void;
@@ -139,10 +141,11 @@ export class WhatsAppClient {
 
     // Handle incoming messages
     this.sock.ev.on('messages.upsert', async ({ messages, type }: { messages: any[]; type: string }) => {
-      if (type !== 'notify') return;
+      if (type !== "notify" && type !== "append") return;
 
       for (const msg of messages) {
-        if (msg.key.fromMe) continue;
+        const fromMe = Boolean(msg.key.fromMe);
+        if (fromMe && !this.options.includeOwnMessages) continue;
         if (msg.key.remoteJid === 'status@broadcast') continue;
 
         const unwrapped = baileysExtractMessageContent(msg.message);
@@ -174,12 +177,13 @@ export class WhatsAppClient {
         const wasMentioned = this.wasMentioned(msg);
 
         this.options.onMessage({
-          id: msg.key.id || '',
-          sender: msg.key.remoteJid || '',
-          pn: msg.key.remoteJidAlt || '',
+          id: msg.key.id || "",
+          sender: msg.key.remoteJid || "",
+          pn: msg.key.remoteJidAlt || "",
           content: finalContent,
           timestamp: msg.messageTimestamp as number,
           isGroup,
+          fromMe,
           ...(isGroup ? { wasMentioned } : {}),
           ...(mediaPaths.length > 0 ? { media: mediaPaths } : {}),
         });
