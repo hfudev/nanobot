@@ -33,7 +33,12 @@ export class BridgeServer {
   private wa: WhatsAppClient | null = null;
   private clients: Set<WebSocket> = new Set();
 
-  constructor(private port: number, private authDir: string, private token: string) {}
+  constructor(
+    private port: number,
+    private authDir: string,
+    private token: string,
+    private includeOwnMessages = true,
+  ) {}
 
   async start(): Promise<void> {
     if (!this.token.trim()) {
